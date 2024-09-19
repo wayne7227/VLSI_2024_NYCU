@@ -1,0 +1,138 @@
+hand-shake主程式碼
+
+// 模块定义，包括输入输出端口
+module handshake_example(
+    input wire clk_a,         // 时钟域A的时钟
+    input wire clk_b,         // 时钟域B的时钟
+    input wire reset,         // 异步重置信号，高电平有效
+    input wire request_in,    // 时钟域A的请求输入
+    output reg acknowledge_out // 时钟域A的确认输出
+);
+
+// 中间信号声明
+reg request_a;                 // 时钟域A的请求信号寄存器
+reg request_to_b;              // 传输到时钟域B的请求信号
+reg [1:0] request_sync_b;      // 时钟域B中请求信号的同步器（两级D触发器）
+reg acknowledge_b;             // 时钟域B的确认信号
+reg [1:0] acknowledge_sync_a;  // 时钟域A中确认信号的同步器（两级D触发器）
+
+// 在时钟域A中寄存请求信号
+// 这里使用了D触发器的基本功能：在时钟上升沿捕获输入信号的值
+always @(posedge clk_a or posedge reset) begin
+    if (reset)
+        request_a <= 1'b0;      // 异步重置
+    else if (request_in)
+        request_a <= 1'b1;      // 捕获请求信号
+    else if (acknowledge_out)
+        request_a <= 1'b0;      // 在收到确认后重置请求信号
+end
+
+// 将请求信号从时钟域A传输到B，并进行同步
+// 这个过程中，request_to_b 和 request_sync_b 的每一个寄存器都是一个D触发器
+always @(posedge clk_b or posedge reset) begin
+    if (reset) begin
+        request_to_b <= 1'b0;
+        request_sync_b <= 2'b00; // 异步重置
+    end else begin
+        request_to_b <= request_a; // 第一级D触发器
+        request_sync_b <= {request_sync_b[0], request_to_b}; // 第二级D触发器
+    end
+end
+
+// 时钟域B接收请求并生成确认信号
+// acknowledge_b 的更新在 clk_b 的上升沿，表明其是一个D触发器的输出
+always @(posedge clk_b or posedge reset) begin
+    if (reset)
+        acknowledge_b <= 1'b0;   // 异步重置
+    else if (request_sync_b[1])
+        acknowledge_b <= 1'b1;   // 生成确认信号
+    else
+        acknowledge_b <= 1'b0;   // 重置确认信号
+end
+
+// 将确认信号从时钟域B传输回A，并进行同步
+// 这个过程中，每个寄存器也是实现了D触发器的功能
+always @(posedge clk_a or posedge reset) begin
+    if (reset) begin
+        acknowledge_sync_a <= 2'b00; // 异步重置
+    end else begin
+        acknowledge_sync_a <= {acknowledge_sync_a[0], acknowledge_b}; // D触发器级联
+    end
+end
+
+// 在时钟域A输出同步后的确认信号
+// 这个部分虽然是条件赋值，但acknowledge_sync_a[1]的更新依赖于D触发器
+always @(posedge clk_a or posedge reset) begin
+    if (reset)
+        acknowledge_out <= 1'b0;  // 异步重置
+    else
+        acknowledge_out <= acknowledge_sync_a[1]; // 输出同步后的信号
+end
+
+endmodule
+
+
+hand-shake之test-bench
+
+
+
+`timescale 1ns / 1ps
+module handshake_example_tb;
+
+// 输入和输出的模拟信号
+reg clk_a;
+reg clk_b;
+reg reset;
+reg request_in;
+wire acknowledge_out;
+
+// 实例化待测试的模块
+handshake_example uut (
+    .clk_a(clk_a), 
+    .clk_b(clk_b), 
+    .reset(reset), 
+    .request_in(request_in), 
+    .acknowledge_out(acknowledge_out)
+);
+
+// 生成时钟A信号
+always #10 clk_a = ~clk_a; // 50MHz
+
+// 生成时钟B信号
+always #15 clk_b = ~clk_b; // 略快于33MHz，以模拟不同的时钟域
+
+// 初始化和测试序列
+initial begin
+    // 初始化信号
+    clk_a = 0;
+    clk_b = 0;
+    reset = 1;
+    request_in = 0;
+
+    // 复位系统
+    #20;
+    reset = 0;
+    
+    // 发送请求信号
+    #40;
+    request_in = 1;
+    #20;
+    request_in = 0;
+
+    // 等待并观察确认信号
+    #100;
+
+    // 重复请求以测试模块的反复使用
+    #20;
+    request_in = 1;
+    #20;
+    request_in = 0;
+
+    // 完成测试
+    #100;
+    $finish;
+end
+
+endmodule
+
+

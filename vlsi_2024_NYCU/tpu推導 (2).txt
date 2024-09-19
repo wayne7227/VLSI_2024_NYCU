@@ -1,0 +1,164 @@
+3.1.1重點推導整理
+
+
+TPU分析：
+時鐘速度：700MHz
+計算性能：高達92 TOPS/S，具有相對較低的能耗
+設計特點：使用8位整數量化對神經網絡進行預測，單一用途設計最大化了儲存和運算區域
+影響因素：28納米製程、算法和激活函數設計顯著影響性能和效率
+激活功能（Sigmoid）的模擬電路設計：
+設計概述：一個多層神經網絡電路，將來自不同分支的多個電流綜合到一個差分放大器中
+元件使用：晶體管M1至M4充當記憶體，促進電流的綜合
+模擬結果：Hspice模擬將輸入映射到類似Sigmoid函數的輸出
+激活功能（Sigmoid）的數位電路仿真：
+技術方法：使用8個斜率的分段線性方法在Quartus II平台上使用Verilog開發Sigmoid功能的數位電路近似
+輸入輸出：設計輸入為16位，輸出為8位，使用ModelSim進行仿真
+輸出展示：輸出值以十六進位顯示在座標圖上，展示了對Sigmoid函數的近似
+模擬與數位神經網絡的分析：
+模擬優點：面積小、晶片成本低，且耗能也相對數位電路小很多
+模擬缺點：受直流和雜訊影響，輸出穩定性差，輸入電壓擺幅受限，最終需有ADC將模擬訊號轉成數位訊號
+數位優點：與處理器的介面簡單，資料能直接用於後續的大量計算
+數位缺點：面積大、晶片成本高
+
+
+規格:
+時脈頻率：1.5 GHz，以支持高速數據處理。
+運算能力：200 TOPS（每秒百萬次運算），確保可以快速處理大量的卷積運算。
+數據精度：使用 8 位定點數，這在深度學習中通常足夠且可以減少功耗。
+記憶體大小：至少 32 GB HBM2（高帶寬記憶體），以支持大型神經網絡模型和數據的快速存取。
+能源效率：先暫定每 TOPS 少於 5 瓦特，以最大化電池使用效率和系統冷卻設計
+(看能源有沒有受到限制)
+
+
+tpu的verilog
+(內含mac+handshaking+sram)
+
+
+module tpu_system(
+    input clk,
+    input reset,
+    output [15:0] result_out
+);
+    // 定義 SRAM 和 MAC 模塊的接口
+    reg [3:0] addr;
+    reg write_enable;
+    reg [7:0] data_in;
+    wire [7:0] data_out;
+    reg [7:0] mac_a, mac_b;
+    wire [15:0] mac_result;
+
+    // Hand Shaking 信號
+    reg start;
+    wire reqA, ackA, reqB, ackB;
+
+    // 狀態機控制
+    reg [3:0] state;
+    parameter IDLE = 0, READ = 1, PROCESS = 2, WRITE = 3, DONE = 4;
+
+    // 實例化 SRAM
+    sram sram0(
+        .clk(clk),
+        .addr(addr),
+        .data_in(data_in),
+        .write_enable(write_enable),
+        .data_out(data_out)
+    );
+
+    // 實例化 Hand Shaking
+    hand_shaking hs(
+        .clkA(clk),
+        .clkB(clk),
+        .reqA(reqA),
+        .ackA(ackA),
+        .reqB(reqB),
+        .ackB(ackB)
+    );
+
+    // 實例化 MAC 單元
+    mac_unit mac(
+        .clk(clk),
+        .a(mac_a),
+        .b(mac_b),
+        .result(mac_result)
+    );
+
+    // 狀態機和控制邏輯
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            state <= IDLE;
+            addr <= 0;
+            write_enable <= 0;
+            start <= 0;
+        end else begin
+            case (state)
+                IDLE: begin
+                    start <= 1;  // 觸發 Hand Shaking
+                    if (ackA) begin
+                        state <= READ;
+                    end
+                end
+                READ: begin
+                    mac_a <= data_out;  // 讀取數據到 MAC
+                    mac_b <= data_out;  // 簡化示例，使用相同數據
+                    state <= PROCESS;
+                end
+                PROCESS: begin
+                    if (reqB) begin
+                        state <= WRITE;
+                        data_in <= mac_result[7:0];  // 假設我們只回寫部分結果
+                        write_enable <= 1;
+                    end
+                end
+                WRITE: begin
+                    write_enable <= 0;
+                    addr <= addr + 1;  // 更新地址
+                    if (addr == 15) state <= DONE;
+                    else state <= READ;
+                end
+                DONE: begin
+                    result_out <= mac_result;  // 輸出最終結果
+                end
+            endcase
+        end
+    end
+endmodule
+
+
+tpu之module之test bench
+
+
+`timescale 1ns / 1ps
+
+module tpu_system_tb;
+
+reg clk;
+reg reset;
+wire [15:0] result_out;
+
+// 實例化 tpu_system
+tpu_system uut (
+    .clk(clk),
+    .reset(reset),
+    .result_out(result_out)
+);
+
+// 時鐘生成
+initial begin
+    clk = 0;
+    forever #5 clk = ~clk;  // 生成一個 100MHz 的時鐘信號
+end
+
+// 測試序列
+initial begin
+    reset = 1;  // 激活重設信號
+    #20 reset = 0;  // 重設後開始操作
+
+    // 監視重要的輸出
+    $monitor("Time=%t, result_out=%h", $time, result_out);
+
+    #200;  // 運行足夠的時間以觀察一些操作週期
+    $finish;  // 結束模擬
+end
+
+endmodule
+ 

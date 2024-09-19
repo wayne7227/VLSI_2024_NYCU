@@ -1,0 +1,104 @@
+inverter的module以及test bench
+
+module Inverter(input wire a, output wire y);
+    assign y = ~a;
+endmodule
+
+
+module Inverter_tb;
+
+    reg a;
+    wire y;
+
+    Inverter inv(.a(a), .y(y));
+
+    initial begin
+        $display("a | y");
+        $monitor("%b | %b", a, y);
+        a = 0; #10;        
+	a = 1; #10; 
+        $finish;
+    end
+endmodule
+
+and的module以及test bench
+
+
+module AND2(input wire a, input wire b, output wire c);
+    assign c = a & b;
+endmodule
+
+
+module AND2_tb;
+reg a, b;
+wire d;  // 使用wire类型接收模块输出
+
+// 实例化AND2模块并连接输入输出
+AND2 and2_inst(.a(a), .b(b), .c(d));
+
+initial begin
+    $display("a | b | d");  // 更新打印标题，移除c
+    $monitor("%b | %b | %b", a, b, d);  // 正确使用$monitor并移除c
+    a = 0; b = 0; #10;
+    a = 0; b = 1; #10;
+    a = 1; b = 0; #10;
+    a = 1; b = 1; #10;
+    $finish;
+end
+endmodule
+
+NAND的module 與 test bench
+
+module NAND2(input wire a, input wire b, output wire c);
+    assign c = ~(a & b);
+endmodule
+
+module NAND2_tb;
+    reg a, b; 
+    wire d;     NAND2 nand2_instance(.a(a), .b(b), .c(d)); 
+
+    initial begin
+        $display("a  b | d");
+        $monitor("%b  %b | %b", a, b, d);
+        a = 0; b = 0; #10;
+        a = 1; b = 0; #10;
+        a = 0; b = 1; #10;
+        a = 1; b = 1; #10;
+        $finish;
+    end
+endmodule
+
+
+推導finfet transistor model
+
+FinFET 晶體管的電荷控制方程為：Q = C_g(V_g - V_th) + Q_d + Q_b
+Q 是 FinFET 晶體管的柵極電荷
+C_g 是 FinFET 晶體管的柵極電容
+V_g 是 FinFET 晶體管的柵極電壓
+V_th 是 FinFET 晶體管的閾值電壓
+Q_d 是 FinFET 晶體管的耗盡區電荷
+Q_b 是 FinFET 晶體管的體電荷
+
+Q_d = -ε_si qN_a / L_D * (V_bi - V_g + V_th)^2
+Q_b = ε_si qN_a / L_D * (V_bi - V_g + V_th)
+
+(備註:
+ε_si 是矽的介電常數
+q 是電子電荷
+N_a 是 FinFET 晶體管的源極/漏極摻雜濃度
+L_D 是 FinFET 晶體管的耗盡區長度
+V_bi 是 FinFET 晶體管的內建電壓
+)
+
+FinFET 晶體管的電流方程為：I_D = μ_n C_g W / L * (V_g - V_th)^2
+(備註:
+I_D 是 FinFET 晶體管的漏極電流
+μ_n 是電子遷移率
+W 是 FinFET 晶體管的鰭寬度
+L 是 FinFET 晶體管的柵極長度
+)
+
+而將電荷控制方程和電流方程這兩者結合起來，可以得到 FinFET 晶體管的電氣特性
+=>g_m = μ_n C_g W / L * (V_g - V_th)
+
+可以觀察得出当 g_m 值較大時，少量施加於栅极的電壓變化就能引起較大的漏極电流变化，表明晶體管具有較强的电流放大能力

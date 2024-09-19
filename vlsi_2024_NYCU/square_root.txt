@@ -1,0 +1,102 @@
+module square_root(clk, rst, start, number, root, ready);
+    input clk, rst, start;
+    input [15:0] number; // 
+    output reg [7:0] root; // 
+    output reg ready; // 用來說明計算完成
+
+    reg [15:0] num; // 輸入暫存
+    reg [15:0] tempRoot; 計算root暫時值
+    reg [7:0] count; // 迭代計數器
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            root <= 0;
+            ready <= 0;
+            count <= 0;
+        end else if (start) begin
+            num <= number;
+            tempRoot <= number >> 1; // 初始input/2
+            count <= 8'd255; // 最大迭代次數,先取255次
+            ready <= 0;
+        end else if (count != 0) begin
+            tempRoot <= (tempRoot + num / tempRoot) >> 1; // 牛頓迭代公式,牛頓的原理是將Xn+1=1/2(Xn+a/Xn),以此來迭代並越來越接近真實得到的平方根數
+            count <= count - 1;//迭代計數器
+            if (count == 1) begin
+                // 直接取tempRoot的整數部分，無條件捨去小數
+                root <= tempRoot[15:8]; // 前半段是整數,後半段小數
+                ready <= 1;
+            end
+        end
+    end
+endmodule
+
+
+
+
+以下為test_bench
+
+
+`timescale 1ns / 1ps
+
+module square_root_tb;
+
+    // Inputs
+    reg clk;
+    reg rst;
+    reg start;
+    reg [15:0] number;
+
+    // Outputs
+    wire [7:0] root;
+    wire ready;
+
+    square_root uut (
+        .clk(clk), 
+        .rst(rst), 
+        .start(start), 
+        .number(number), 
+        .root(root), 
+        .ready(ready)
+    );
+
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #10 clk = ~clk; // 每10ns完成一個Clock
+    end
+
+    // Test sequence
+    initial begin
+        // Initialize Inputs,將所有參數重置
+        rst = 1;
+        start = 0;
+        number = 0;
+
+        // Reset the system
+        #20;將reset歸0防止一直重置
+        rst = 0;
+
+        // Apply test values
+        #30; 等待
+        number = 2; // 設定我的學號末數2
+        start = 1; //吃參數進來
+        #10;
+        start = 0; // 停止吃參數
+
+     
+        #2000; // 給系統假定的計算時間
+        
+        // Check the output
+        if (ready == 1'b1) begin
+            $display("Calculation completed. Output root: %d", root);運算完ready=1展示結果
+        end else begin
+            $display("Calculation not completed.");否則印出未完成
+        end
+
+        // End simulation
+        #100;
+        $finish;
+    end
+
+endmodule
+

@@ -1,0 +1,24 @@
+// DSCH 2.7a
+// 2024/5/7 ¤U¤È 02:29:16
+// example
+
+module example( in3,in1,in2);
+ input in3,in1,in2;
+ nmos #(17) nmos(vss,w1,w2); // 1.0u 0.12u
+ nmos #(31) nmos(w2,vss,w1); // 1.0u 0.12u
+ pmos #(31) pmos(w2,vdd,w1); // 2.0u 0.12u
+ pmos #(17) pmos(vdd,w1,w2); // 2.0u 0.12u
+ nmos #(31) nmos(w1,in1,in3); // 1.0u 0.12u
+ nmos #(10) nmos(in2,w2,in3); // 1.0u 0.12u
+endmodule
+
+// Simulation parameters in Verilog Format
+always
+#1000 in3=~in3;
+#2000 in1=~in1;
+#4000 in2=~in2;
+
+// Simulation parameters
+// in3 CLK 10 10
+// in1 CLK 20 20
+// in2 CLK 40 40

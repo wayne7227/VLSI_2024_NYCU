@@ -1,0 +1,79 @@
+主module
+
+User
+module traffic_light_controll(
+input clk,
+input reset,
+output reg [1:0]state
+);
+parameter RED=2'b11,GREEN=2'b00,YELLOW=2'b10;
+
+reg[1:0]current_state,next_state;
+
+always@(posedge_clk or posedge reset)begin
+if(reset)
+current_state <= RED;
+else
+current_state <= next_state;
+end
+
+always@(*)begin
+case(current_state)
+RED:next_state<=GREEN;
+GREEN:next_state<=YELLOW;
+YELLOW:next_state<=RED;
+default:next_state<=RED;
+endcase
+end
+
+always@(current_state)begin
+state <= current_state;
+end
+
+endmodule
+
+testbench的部分
+
+`timescale 1ns / 1ps
+
+module test_traffic_light_controller;
+
+// 輸入和輸出
+reg clk;
+reg reset;
+wire [1:0] state;
+
+// 實例化測試對象
+traffic_light_controller tlc(
+    .clk(clk),
+    .reset(reset),
+    .state(state)
+);
+
+// 產生時鐘信號
+initial begin
+    clk = 0;
+    forever #10 clk = ~clk;  // 時鐘週期為20ns
+end
+
+// 初始和重設條件
+initial begin
+    // 初始化
+    reset = 1;  // 啟動時先進行重設
+    #40 reset = 0;  // 保持重設狀態40ns後釋放
+
+    // 觀察多個週期
+    #200;  // 運行200ns以觀察狀態變化
+
+    // 結束模擬
+    $finish;
+end
+
+// 顯示輸出狀態
+initial begin
+    $monitor("Time = %t, reset = %b, state = %b", $time, reset, state);
+end
+
+endmodule
+
+
